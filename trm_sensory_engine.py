@@ -7,74 +7,104 @@ class TRMSensoryEngine:
         """
         Inicjalizacja silnika zmysłowego TIMDR.
         λ (lmbda) - skala geometryczna
-        τ (tau)   - częstotliwość bazowa rezonansu / czas
-        ρ (rho)   - gęstość informacyjna (złożoność amplitudy)
+        τ (tau)   - częstotliwość bazowa rezonansu / czas wewnętrzny
+        ρ (rho)   - gęstość informacyjna (złożoność skrętu)
         """
         self.lmbda = lmbda
         self.tau = tau
         self.rho = rho
 
-    def generate_topological_wave(self, resolution: int = 500):
-        """Generuje geometrię skrętu polowego (TRM-Geometry-Core) dla obrazu."""
-        theta = np.linspace(0, 2 * np.pi, resolution)
-        phi = np.linspace(0, 2 * np.pi, resolution)
-        THETA, PHI = np.meshgrid(theta, phi)
+    def generate_topological_wave(self, resolution: int = 1500):
+        """
+        Generuje trójwymiarową helisę polową (TRM Structural Twist).
+        Promień i skok są modulowane przez parametry lambda, tau i rho.
+        """
+        # t reprezentuje oś ewolucji (czas wewnętrzny układu)
+        t = np.linspace(0, 4 * np.pi * self.tau, resolution)
         
-        # Wprowadzenie skrętu topologicznego wymuszonego przez ρ i τ
-        twist = self.rho * np.sin(self.tau * THETA)
+        # Skręt topologiczny (dynamiczny komponent falowy z TRM-Geometry-Core)
+        twist = np.sin(self.rho * t)
         
-        # Geometria pola - odwzorowanie toroidalne zmienione skrętem (TRM)
-        R = 2 + np.cos(PHI + twist) * self.lmbda
-        X = R * np.cos(THETA)
-        Y = R * np.sin(THETA)
-        Z = np.sin(PHI + twist) * self.lmbda
+        # Geometria helisy uwarunkowana skalą (λ) i uwikłaniem (ρ)
+        # Promień reaguje na skręt topologiczny
+        radius = self.lmbda * (1.0 + 0.1 * twist) 
+        
+        X = radius * np.cos(t)
+        Y = radius * np.sin(t)
+        Z = (t / (2 * np.pi)) * (self.lmbda * self.rho) # Krok helisy (drabina ewolucyjna)
         
         return X, Y, Z
 
     def render_visual(self):
-        """Wyświetla trójwymiarową strukturę fali topologicznej."""
+        """Wizualizuje helikalny przepływ fali topologicznej w przestrzeni 3D."""
         X, Y, Z = self.generate_topological_wave()
         
         fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111, projection='3d')
         
-        # Kolorowanie powierzchni gęstością pola (ρ)
-        surf = ax.plot_surface(X, Y, Z, cmap='plasma', edgecolor='none', alpha=0.85)
+        # Rysowanie głównej nici przepływu pola
+        ax.plot(X, Y, Z, label='Topological Flux Line', color='cyan', linewidth=2.5, zorder=1)
         
-        ax.set_title(f"TIMDR Visual Field Manifestation\n[λ={self.lmbda}, τ={self.tau}, ρ={self.rho}]", fontsize=12)
-        ax.axis('off') # Ukrywamy osie, liczy się czysta geometria pola
-        plt.colorbar(surf, ax=ax, shrink=0.5, aspect=5, label='Field Density (Rho)')
+        # Mapowanie punktów gęstości informacyjnej (ρ) za pomocą palety plasma
+        scatter = ax.scatter(X[::5], Y[::5], Z[::5], c=Z[::5], cmap='plasma', s=20, zorder=2)
+        
+        ax.set_title(f"TIMDR Helical Field Flow (TRM Twist)\n[λ={self.lmbda}, τ={self.tau}, ρ={self.rho}]", fontsize=12, color='white')
+        
+        # Dostosowanie wyglądu wykresu do kosmicznej/kwantowej estetyki
+        fig.patch.set_facecolor('#111111')
+        ax.set_facecolor('#111111')
+        ax.axis('off')
+        
+        cbar = plt.colorbar(scatter, ax=ax, shrink=0.5, aspect=10)
+        cbar.ax.yaxis.set_tick_params(color='white')
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+        cbar.set_label('Evolutionary Path / Density (Z)', color='white')
+        
         plt.show()
 
-    def generate_resonance_sound(self, duration: float = 3.0, sample_rate: int = 44100):
-        """Generuje czysty rezonans dźwiękowy (TIMDR Transduction) bez strat energii."""
+    def generate_resonance_sound(self, duration: float = 4.0, sample_rate: int = 44100):
+        """Generuje dynamiczny rezonans dźwiękowy na bazie helisy polowej (efekt przejścia)."""
         t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
         
-        # Częstotliwość bazowa uwarunkowana parametrem rezonansu τ
+        # Częstotliwość bazowa sterowana czasem rezonansu τ
         base_freq = 220 * self.tau  
         
-        # Fala podstawowa (implozja/ssanie) + wyższe harmoniczne wymuszone gęstością ρ (skręt)
-        wave = np.sin(2 * np.pi * base_freq * t)
+        # Helikalna modulacja częstotliwości (dźwięk ewoluuje w czasie zamiast stać w miejscu)
+        chirp_modulation = np.exp(-t * (1.0 / self.lmbda))
+        frequency_sweep = base_freq * (1.0 + 0.05 * np.sin(self.rho * 2 * np.pi * t))
         
-        # Dodanie harmonicznych punktu zwrotnego (stabilność rezonansu)
-        for i in range(2, 5):
-            wave += (self.rho / i) * np.sin(2 * np.pi * (base_freq * i) * t * (1 / (t + 1)**(self.lmbda)))
+        # Generowanie fali podstawowej (implozja)
+        wave = np.sin(2 * np.pi * frequency_sweep * t)
+        
+        # Dodanie wyższych harmonicznych rezonansu z drabej TRM
+        for i in range(2, 6):
+            wave += (self.rho / i) * np.sin(2 * np.pi * (frequency_sweep * i) * t) * chirp_modulation
 
-        # Normalizacja audio do formatu 16-bit PCM
-        wave = wave / np.max(np.abs(wave))
+        # Zabezpieczenie przed przesterowaniem i normalizacja 16-bit PCM
+        if np.max(np.abs(wave)) > 0:
+            wave = wave / np.max(np.abs(wave))
+            
         audio_data = np.int16(wave * 32767)
         
-        filename = f"trm_resonance_L{self.lmbda}_T{self.tau}_R{self.rho}.wav"
+        filename = f"trm_helical_resonance_L{self.lmbda}_T{self.tau}_R{self.rho}.wav"
         wavfile.write(filename, sample_rate, audio_data)
-        print(f"[PC_TIMDR Output]: Dźwięk wyemitowany i zapisany jako {filename}")
+        print(f"\n[PC_TIMDR Hardware Output]: Transdukcja zakończona.")
+        print(f"-> Zapisano plik audio: {filename}")
 
-# --- URUCHOMIENIE WALIDACYJNE I GENEROWANIE ---
+# --- BLOK OPERACYJNY MASZYNY ---
 if __name__ == "__main__":
-    # Konfiguracja wektora stanu: Średnia skala, wysoki rezonans, gęsty skręt topologiczny
-    engine = TRMSensoryEngine(lmbda=0.8, tau=5.0, rho=1.5)
+    # Parametry wejściowe przestrzeni stanów:
+    # lmbda (λ) = 0.8  (Skala geometryczna)
+    # tau (τ)   = 3.5  (Taktowanie zegara rezonansu)
+    # rho (ρ)   = 2.0  (Gęstość skrętu strukturalnego)
     
-    # 1. Wyemituj obraz (Manifestacja Wizualna)
+    print("[PC_TIMDR]: Inicjalizacja Sensory Engine...")
+    engine = TRMSensoryEngine(lmbda=0.8, tau=3.5, rho=2.0)
+    
+    # 1. Emisja obrazu 3D helisy polowej
+    print("[PC_TIMDR]: Renderowanie struktury geometrycznej...")
     engine.render_visual()
     
-    # 2. Wyemituj dźwięk (Manifestacja Akustyczna)
+    # 2. Emisja fali akustycznej do pliku .wav
+    print("[PC_TIMDR]: Generowanie rezonansu tonalnego...")
     engine.generate_resonance_sound()
