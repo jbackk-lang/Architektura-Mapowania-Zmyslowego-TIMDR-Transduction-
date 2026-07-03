@@ -109,4 +109,91 @@ class TRMSensoryEngine:
         )
 
         # Gęstość jako chmura punktów (pole, nie geometria)
-        scatter =
+        scatter = ax.scatter(
+            Xo[::8],
+            Yo[::8],
+            Zo[::8],
+            c=density[::8],
+            cmap='plasma',
+            s=18,
+            zorder=4
+        )
+
+        ax.set_title(
+            f"TIMDR TRM Field Shape (λ={self.lmbda}, τ={self.tau}, ρ={self.rho})",
+            fontsize=12,
+            color='white'
+        )
+
+        fig.patch.set_facecolor('#000000')
+        ax.set_facecolor('#000000')
+        ax.axis('off')
+
+        cbar = plt.colorbar(scatter, ax=ax, shrink=0.6, aspect=12)
+        cbar.ax.yaxis.set_tick_params(color='white')
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+        cbar.set_label('TRM Density (ρ_eff)', color='white')
+
+        ax.legend(loc='upper left', facecolor='#000000', edgecolor='white')
+        for text in ax.legend().get_texts():
+            text.set_color('white')
+
+        plt.show()
+
+    def generate_resonance_sound(self, duration: float = 4.0, sample_rate: int = 44100):
+        """
+        Rezonans TRM: dźwięk nie jest sinusoidą, tylko projekcją pola.
+        - częstotliwość bazowa: związana z τ (czas wewnętrzny)
+        - modulacja: gęstość TRM (ρ_eff)
+        - collapse: wygaszanie obszarów poniżej progu 0.5
+        """
+        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+
+        # Bazowa częstotliwość związana z τ (TIMDR-time → rezonans)
+        base_freq = 220.0 * self.tau
+
+        # TRM-phase w domenie akustycznej
+        phase = self.rho * 2.0 * np.pi * t
+
+        # Gęstość TRM w czasie (projekcja pola na oś akustyczną)
+        density_t = 0.5 * (1.0 + np.sin(phase))
+
+        # Collapse: wygaszanie obszarów o niskiej gęstości
+        collapse_t = np.where(density_t < 0.5, 0.3, 1.0)
+
+        # Sweep częstotliwości sterowany gęstością pola
+        freq_t = base_freq * (0.8 + 0.6 * density_t)
+
+        # Fala bazowa
+        wave = np.sin(2.0 * np.pi * freq_t * t)
+
+        # Harmoniczne TRM – nie klasyczne, tylko gęstościowe
+        for i in range(2, 6):
+            weight = (density_t ** 2) * (self.rho / i)
+            wave += weight * np.sin(2.0 * np.pi * (freq_t * i) * t)
+
+        # Zastosowanie collapse (implozja)
+        wave *= collapse_t
+
+        # Normalizacja
+        max_val = np.max(np.abs(wave))
+        if max_val > 0:
+            wave = wave / max_val
+
+        audio_data = np.int16(wave * 32767)
+        filename = f"trm_field_resonance_L{self.lmbda}_T{self.tau}_R{self.rho}.wav"
+        wavfile.write(filename, sample_rate, audio_data)
+
+        print("\n[PC_TIMDR Hardware Output]: TRM transduction complete.")
+        print(f"-> Zapisano plik audio: {filename}")
+
+# --- BLOK OPERACYJNY MASZYNY ---
+if __name__ == "__main__":
+    print("[PC_TIMDR]: Inicjalizacja TRM Sensory Engine...")
+    engine = TRMSensoryEngine(lmbda=0.8, tau=3.5, rho=2.0)
+
+    print("[PC_TIMDR]: Renderowanie TRM-kształtu pola...")
+    engine.render_visual()
+
+    print("[PC_TIMDR]: Generowanie TRM-rezonansu tonalnego...")
+    engine.generate_resonance_sound()
